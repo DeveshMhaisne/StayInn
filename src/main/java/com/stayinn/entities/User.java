@@ -25,6 +25,7 @@ public class User extends BaseEntity{
 	    private String email;
 	    private String password; // BCrypt encoded
 	    private String name;
+	    private String mobile;
 	    
 	    @Enumerated(EnumType.STRING)
 	    private Role role; // ADMIN, USER
