@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useSearchParams } from 'react-router-dom';
+import { useLocation } from "react-router-dom"; // Add useLocation
 import {
     Box, Container, Grid, Paper, Typography, Slider,
     FormControlLabel, Checkbox, FormGroup, Divider, Skeleton, Button, Alert
 } from '@mui/material';
 import HotelCard from '../components/HotelCard';
-import { hotelApi } from '../services/hotelApi'; // ADDED
+import { hotelApi } from '../services/hotelApi';
 
 const ListingsPage = () => {
     const [searchParams] = useSearchParams();
@@ -15,12 +15,25 @@ const ListingsPage = () => {
     const [allVillas, setAllVillas] = useState([]);
     const [villas, setVillas] = useState([]);
     const [error, setError] = useState(null);
+    const location = useLocation(); // Hook
 
     useEffect(() => {
         const fetchVillas = async () => {
             setLoading(true);
+            const queryParams = new URLSearchParams(location.search);
+            const searchLocation = queryParams.get('location');
+
             try {
-                const response = await hotelApi.getAll();
+                let response;
+                if (searchLocation) {
+                    // Use search API if location param exists
+                    response = await hotelApi.search(searchLocation);
+                } else {
+                    // Otherwise get all
+                    response = await hotelApi.getAll();
+                }
+
+                // API returns: { success: true, count: N, data: [...] }
                 // API returns: { success: true, count: N, data: [...] }
                 if (response.success && Array.isArray(response.data)) {
                     setAllVillas(response.data);
@@ -38,7 +51,7 @@ const ListingsPage = () => {
         };
 
         fetchVillas();
-    }, []);
+    }, [location.search]);
 
     useEffect(() => {
         let filtered = [...allVillas];

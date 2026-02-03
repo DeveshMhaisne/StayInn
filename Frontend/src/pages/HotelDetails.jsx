@@ -41,6 +41,7 @@ const HotelDetails = () => {
     const [checkOut, setCheckOut] = useState(null);
     const [guests, setGuests] = useState(2);
     const [bookingLoading, setBookingLoading] = useState(false);
+    const [bookedDates, setBookedDates] = useState([]); // Store booked ranges
 
     // Rating Form State
     const [reviewText, setReviewText] = useState("");
@@ -55,9 +56,10 @@ const HotelDetails = () => {
             setLoading(true);
             try {
                 // Parallel fetch
-                const [villaRes, ratingRes] = await Promise.all([
+                const [villaRes, ratingRes, bookingRes] = await Promise.all([
                     hotelApi.getDetails(id),
-                    ratingApi.getByVillaId(id)
+                    ratingApi.getByVillaId(id),
+                    bookingApi.getByVilla(id)
                 ]);
 
                 if (villaRes.success) {
@@ -68,6 +70,19 @@ const HotelDetails = () => {
 
                 if (ratingRes.success) {
                     setRatings(ratingRes.data);
+                }
+
+                if (bookingRes.success) {
+                    // Filter valid bookings
+                    const activeBookings = bookingRes.data.filter(b =>
+                        b.status !== 'CANCELLED' && b.status !== 'FAILED'
+                    );
+
+                    const ranges = activeBookings.map(b => ({
+                        start: dayjs(b.checkInDate),
+                        end: dayjs(b.checkOutDate)
+                    }));
+                    setBookedDates(ranges);
                 }
 
             } catch (err) {
@@ -163,6 +178,20 @@ const HotelDetails = () => {
     const nightCount = (checkIn && checkOut) ? checkOut.diff(checkIn, 'day') : 0;
     const totalCost = calculateTotal();
 
+    // Disable Date Function
+    const shouldDisableDate = (date) => {
+        // Disable past dates
+        if (date.isBefore(dayjs(), 'day')) return true;
+
+        // Check against booked ranges
+        return bookedDates.some(range => {
+            // Check if date is within range [start, end)
+            // Using logic: date >= start && date < end 
+            return (date.isAfter(range.start, 'day') || date.isSame(range.start, 'day')) &&
+                (date.isBefore(range.end, 'day'));
+        });
+    };
+
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress /></Box>;
     if (error || !villa) return <Container sx={{ py: 10 }}><Alert severity="error">{error || "Villa not found"}</Alert></Container>;
 
@@ -249,14 +278,14 @@ const HotelDetails = () => {
                                 </Typography>
 
                                 {/* Review List */}
-                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 3 }}>
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 3, maxHeight: '400px', overflowY: 'auto', pr: 1 }}>
                                     {ratings.length > 0 ? ratings.map(review => (
                                         <Paper key={review.id} elevation={0} sx={{ p: 3, bgcolor: 'grey.50', borderRadius: 3 }}>
                                             <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
                                                 <Avatar>{review.userName?.[0] || 'U'}</Avatar>
                                                 <Box>
                                                     <Typography fontWeight={600}>{review.userName || 'Anonymous'}</Typography>
-                                                    <Typography variant="caption" color="text.secondary">{review.createdAt}</Typography>
+                                                    <Typography variant="caption" color="text.secondary">{review.createdAt.split('T')[0]}</Typography>
                                                 </Box>
                                             </Box>
                                             <Rating value={review.score} readOnly size="small" sx={{ mb: 1 }} />
@@ -299,7 +328,7 @@ const HotelDetails = () => {
                         <Grid size={{ xs: 12, md: 4 }}>
                             <Paper
                                 elevation={3}
-                                sx={{ p: 3, borderRadius: 4, position: 'sticky', top: 100, border: '1px solid rgba(0,0,0,0.08)' }}
+                                sx={{ p: 3, borderRadius: 4, position: 'sticky', top: 100, border: '1px solid rgba(0,0,0,0.08)', zIndex: 10 }}
                             >
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', mb: 3 }}>
                                     <Typography variant="h4" fontWeight={700}>
@@ -318,6 +347,7 @@ const HotelDetails = () => {
                                             value={checkIn}
                                             onChange={(newValue) => setCheckIn(newValue)}
                                             disablePast
+                                            shouldDisableDate={shouldDisableDate}
                                             slotProps={{ textField: { fullWidth: true } }}
                                         />
                                     </Grid>
@@ -328,6 +358,7 @@ const HotelDetails = () => {
                                             onChange={(newValue) => setCheckOut(newValue)}
                                             minDate={checkIn}
                                             disabled={!checkIn}
+                                            shouldDisableDate={shouldDisableDate}
                                             slotProps={{ textField: { fullWidth: true } }}
                                         />
                                     </Grid>
